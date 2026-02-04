@@ -2,7 +2,7 @@ from pathlib import Path
 
 # === VisDrone dataset root (HOME PC) ===
 DATA_ROOT = Path(
-    r"C:/Users/ysb53/Desktop/AI Project/Dataset"
+    r"C:/Users/PC/Desktop/AI Project/Dataset"
 )
 
 TRAIN_DIR = DATA_ROOT / "VisDrone2019-DET-train"
