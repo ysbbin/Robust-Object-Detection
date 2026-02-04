@@ -1,0 +1,28 @@
+# data / outputs
+data/
+runs/
+weights/
+checkpoints/
+logs/
+outputs/
+
+# model files
+*.pt
+*.pth
+*.onnx
+
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# venv
+.venv/
+venv/
+ENV/
+env/
+
+# os / ide
+.DS_Store
+Thumbs.db
+.vscode/
