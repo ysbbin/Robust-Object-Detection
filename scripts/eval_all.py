@@ -1,12 +1,18 @@
 """
-Unified evaluation script: 3 models x 4 test sets = 12 evaluations.
+Unified evaluation script: 6 models x 4 test sets = 24 evaluations.
 
-Models : Faster R-CNN, RT-DETR-L, YOLOv8m
+Models (Baseline) : Faster R-CNN, RT-DETR-L, YOLOv8m
+Models (Augmented): Faster R-CNN, RT-DETR-L, YOLOv8m
 Testsets: Clean, Noise, Blur, LowRes
 
 Usage:
     python -m scripts.eval_all
 """
+
+import os
+import sys
+os.environ["PYTHONUNBUFFERED"] = "1"
+sys.stdout.reconfigure(line_buffering=True)
 
 import gc
 import json
@@ -32,14 +38,34 @@ VARIANTS = ["Test_Clean", "Test_Noise", "Test_Blur", "Test_LowRes"]
 SHORT = {"Test_Clean": "Clean", "Test_Noise": "Noise",
          "Test_Blur": "Blur", "Test_LowRes": "LowRes"}
 
-CLASS_NAMES = ["pedestrian", "car", "van", "truck", "bus", "motor"]  # 0-indexed for YOLO, 1-indexed for COCO
+CLASS_NAMES = ["pedestrian", "car", "van", "truck", "bus", "motor"]
 
 COCO_TESTSET_ROOT = Path("data/testsets/coco6")
 YOLO_TESTSET_ROOT = Path("data/testsets/yolo6")
 
-FRCNN_CKPT = Path("experiments/frcnn/baseline_clean/best.pth")
-RTDETR_CKPT = Path("experiments/rtdetr/baseline_clean/weights/best.pt")
-YOLO_CKPT = Path("experiments/yolo/baseline_clean/weights/best.pt")
+# Checkpoint paths
+CKPTS = {
+    "FasterRCNN":      Path("experiments/frcnn/baseline_clean/best.pth"),
+    "FasterRCNN_aug":  Path("experiments/frcnn/augmented/best.pth"),
+    "RT-DETR-L":       Path("experiments/rtdetr/baseline_clean/weights/best.pt"),
+    "RT-DETR-L_aug":   Path("experiments/rtdetr/augmented/weights/best.pt"),
+    "YOLOv8m":         Path("experiments/yolo/baseline_clean/weights/best.pt"),
+    "YOLOv8m_aug":     Path("experiments/yolo/augmented/weights/best.pt"),
+}
+
+# Model display order
+MODEL_ORDER = [
+    "FasterRCNN", "FasterRCNN_aug",
+    "RT-DETR-L", "RT-DETR-L_aug",
+    "YOLOv8m", "YOLOv8m_aug",
+]
+
+# Baseline pairs for comparison
+BASELINE_PAIRS = [
+    ("FasterRCNN", "FasterRCNN_aug"),
+    ("RT-DETR-L", "RT-DETR-L_aug"),
+    ("YOLOv8m", "YOLOv8m_aug"),
+]
 
 OUT_DIR = Path("experiments")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,13 +76,12 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ──────────────────────────────────────────────
 # Faster R-CNN evaluation
 # ──────────────────────────────────────────────
-def _build_frcnn():
-    """Load Faster R-CNN with the trained VisDrone head."""
+def _build_frcnn(ckpt_path: Path):
     model = fasterrcnn_resnet50_fpn_v2(weights=None)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=7)
 
-    ckpt = torch.load(FRCNN_CKPT, map_location="cpu", weights_only=True)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     model.load_state_dict(ckpt["model"])
     model.to(DEVICE).eval()
     return model
@@ -71,7 +96,6 @@ def _frcnn_transforms():
 
 @torch.no_grad()
 def _eval_frcnn_variant(model, variant: str) -> dict:
-    """Run FRCNN on one COCO-format test set and return metrics."""
     img_dir = str(COCO_TESTSET_ROOT / variant / "images" / "val")
     ann_file = str(COCO_TESTSET_ROOT / variant / "annotations" / "instances_val.json")
 
@@ -110,7 +134,6 @@ def _eval_frcnn_variant(model, variant: str) -> dict:
     coco_eval.accumulate()
     coco_eval.summarize()
 
-    # Per-class AP50
     per_class_ap50 = _extract_per_class_ap50(coco_eval, coco_gt)
 
     return {
@@ -121,17 +144,12 @@ def _eval_frcnn_variant(model, variant: str) -> dict:
 
 
 def _extract_per_class_ap50(coco_eval: COCOeval, coco_gt: COCO) -> dict:
-    """Extract per-class AP@50 from COCOeval precision array."""
-    # precision shape: [T, R, K, A, M]
-    # T=IoU thresholds, R=recall thresholds, K=categories, A=areas, M=maxDets
-    # IoU=0.5 is index 0, area=all is index 0, maxDets=100 is index 2
-    precision = coco_eval.eval["precision"]  # (10, 101, K, 4, 3)
+    precision = coco_eval.eval["precision"]
     cat_ids = coco_gt.getCatIds()
     per_class = {}
     for k_idx, cat_id in enumerate(cat_ids):
         cat_info = coco_gt.loadCats(cat_id)[0]
         cat_name = cat_info["name"]
-        # AP@50: iou_idx=0, all recall, category k_idx, area=all(0), maxDets=100(2)
         ap50 = precision[0, :, k_idx, 0, 2]
         ap50 = ap50[ap50 > -1]
         per_class[cat_name] = float(np.mean(ap50)) if len(ap50) > 0 else 0.0
@@ -142,18 +160,12 @@ def _extract_per_class_ap50(coco_eval: COCOeval, coco_gt: COCO) -> dict:
 # RT-DETR / YOLOv8 evaluation (Ultralytics)
 # ──────────────────────────────────────────────
 def _eval_ultralytics(model_path: str, model_cls: str, variant: str) -> dict:
-    """
-    Evaluate an Ultralytics model (YOLO or RTDETR) on a YOLO-format test set.
-    """
     from ultralytics import YOLO, RTDETR
 
     data_yaml = str(YOLO_TESTSET_ROOT / variant / "data.yaml")
 
     if model_cls == "RTDETR":
         model = RTDETR(model_path)
-        # Workaround: Ultralytics pickles the whole model, so cached
-        # valid_mask/anchors from training sit on CPU.  Resetting shapes
-        # forces _generate_anchors to run on the correct device.
         for m in model.model.modules():
             if hasattr(m, "valid_mask") and hasattr(m, "shapes"):
                 m.shapes = []
@@ -162,7 +174,6 @@ def _eval_ultralytics(model_path: str, model_cls: str, variant: str) -> dict:
 
     results = model.val(data=data_yaml, imgsz=1024, batch=1, device=0, verbose=False)
 
-    # Per-class AP50 — results.box.ap50 is a numpy array, one per class
     ap50_arr = results.box.ap50
     per_class = {}
     for i, name in enumerate(CLASS_NAMES):
@@ -174,7 +185,6 @@ def _eval_ultralytics(model_path: str, model_cls: str, variant: str) -> dict:
         "per_class_ap50": per_class,
     }
 
-    # Cleanup
     del model
     torch.cuda.empty_cache()
     gc.collect()
@@ -183,106 +193,130 @@ def _eval_ultralytics(model_path: str, model_cls: str, variant: str) -> dict:
 
 
 # ──────────────────────────────────────────────
+# Generic evaluation runners
+# ──────────────────────────────────────────────
+def _eval_frcnn_model(name: str, ckpt_path: Path, all_results: dict):
+    print("=" * 60)
+    print(f"  {name}  (pycocotools COCOeval)")
+    print("=" * 60)
+    model = _build_frcnn(ckpt_path)
+    all_results[name] = {}
+
+    for v in VARIANTS:
+        print(f"\n  [{SHORT[v]}] evaluating ...", flush=True)
+        metrics = _eval_frcnn_variant(model, v)
+        all_results[name][v] = metrics
+        print(f"  [{SHORT[v]}] mAP50={metrics['mAP50']:.4f}  mAP50-95={metrics['mAP50_95']:.4f}")
+
+    del model
+    torch.cuda.empty_cache()
+    gc.collect()
+
+
+def _eval_ultra_model(name: str, ckpt_path: Path, model_cls: str, all_results: dict):
+    print("\n" + "=" * 60)
+    print(f"  {name}  (Ultralytics)")
+    print("=" * 60)
+    all_results[name] = {}
+
+    for v in VARIANTS:
+        print(f"\n  [{SHORT[v]}] evaluating ...", flush=True)
+        metrics = _eval_ultralytics(str(ckpt_path), model_cls, v)
+        all_results[name][v] = metrics
+        print(f"  [{SHORT[v]}] mAP50={metrics['mAP50']:.4f}  mAP50-95={metrics['mAP50_95']:.4f}")
+
+
+# ──────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────
 def main():
     print(f"Device: {DEVICE}")
-    print(f"Evaluating 3 models x {len(VARIANTS)} test sets = {3 * len(VARIANTS)} runs\n")
+    print(f"Evaluating 6 models x {len(VARIANTS)} test sets = {6 * len(VARIANTS)} runs\n")
 
-    all_results = {}  # {model_name: {variant: metrics_dict}}
+    all_results = {}
     t0 = time.time()
 
-    # ── 1. Faster R-CNN ──────────────────────
-    print("=" * 60)
-    print("  Faster R-CNN  (pycocotools COCOeval)")
-    print("=" * 60)
-    frcnn = _build_frcnn()
-    all_results["FasterRCNN"] = {}
+    # Baseline models
+    _eval_frcnn_model("FasterRCNN", CKPTS["FasterRCNN"], all_results)
+    _eval_ultra_model("RT-DETR-L", CKPTS["RT-DETR-L"], "RTDETR", all_results)
+    _eval_ultra_model("YOLOv8m", CKPTS["YOLOv8m"], "YOLO", all_results)
 
-    for v in VARIANTS:
-        print(f"\n  [{SHORT[v]}] evaluating ...", flush=True)
-        metrics = _eval_frcnn_variant(frcnn, v)
-        all_results["FasterRCNN"][v] = metrics
-        print(f"  [{SHORT[v]}] mAP50={metrics['mAP50']:.4f}  mAP50-95={metrics['mAP50_95']:.4f}")
-
-    del frcnn
-    torch.cuda.empty_cache()
-    gc.collect()
-
-    # ── 2. RT-DETR-L ─────────────────────────
-    print("\n" + "=" * 60)
-    print("  RT-DETR-L  (Ultralytics)")
-    print("=" * 60)
-    all_results["RT-DETR-L"] = {}
-
-    for v in VARIANTS:
-        print(f"\n  [{SHORT[v]}] evaluating ...", flush=True)
-        metrics = _eval_ultralytics(str(RTDETR_CKPT), "RTDETR", v)
-        all_results["RT-DETR-L"][v] = metrics
-        print(f"  [{SHORT[v]}] mAP50={metrics['mAP50']:.4f}  mAP50-95={metrics['mAP50_95']:.4f}")
-
-    # ── 3. YOLOv8m ───────────────────────────
-    print("\n" + "=" * 60)
-    print("  YOLOv8m  (Ultralytics)")
-    print("=" * 60)
-    all_results["YOLOv8m"] = {}
-
-    for v in VARIANTS:
-        print(f"\n  [{SHORT[v]}] evaluating ...", flush=True)
-        metrics = _eval_ultralytics(str(YOLO_CKPT), "YOLO", v)
-        all_results["YOLOv8m"][v] = metrics
-        print(f"  [{SHORT[v]}] mAP50={metrics['mAP50']:.4f}  mAP50-95={metrics['mAP50_95']:.4f}")
+    # Augmented models
+    _eval_frcnn_model("FasterRCNN_aug", CKPTS["FasterRCNN_aug"], all_results)
+    _eval_ultra_model("RT-DETR-L_aug", CKPTS["RT-DETR-L_aug"], "RTDETR", all_results)
+    _eval_ultra_model("YOLOv8m_aug", CKPTS["YOLOv8m_aug"], "YOLO", all_results)
 
     elapsed = time.time() - t0
     print(f"\nTotal evaluation time: {elapsed/60:.1f} min")
 
-    # ── Summary tables ───────────────────────
+    # Summary
     _print_summary(all_results)
+    _print_comparison(all_results)
     _save_json(all_results)
     _save_csv(all_results)
 
 
+# ──────────────────────────────────────────────
+# Output
+# ──────────────────────────────────────────────
 def _print_summary(all_results: dict):
-    models = list(all_results.keys())
+    models = [m for m in MODEL_ORDER if m in all_results]
     header_short = [SHORT[v] for v in VARIANTS]
 
     # mAP@50 table
     print("\n" + "=" * 60)
     print("  mAP@50 Summary")
     print("=" * 60)
-    print(f"{'Model':<14}" + "".join(f"{h:>10}" for h in header_short))
-    print("-" * (14 + 10 * len(header_short)))
+    print(f"{'Model':<18}" + "".join(f"{h:>10}" for h in header_short))
+    print("-" * (18 + 10 * len(header_short)))
     for m in models:
         vals = [all_results[m][v]["mAP50"] for v in VARIANTS]
-        print(f"{m:<14}" + "".join(f"{v:>10.4f}" for v in vals))
+        print(f"{m:<18}" + "".join(f"{v:>10.4f}" for v in vals))
 
     # mAP@50-95 table
-    print(f"\n{'Model':<14}" + "".join(f"{h:>10}" for h in header_short))
-    print("-" * (14 + 10 * len(header_short)))
+    print(f"\n{'Model':<18}" + "".join(f"{h:>10}" for h in header_short))
+    print("-" * (18 + 10 * len(header_short)))
     for m in models:
         vals = [all_results[m][v]["mAP50_95"] for v in VARIANTS]
-        print(f"{m:<14}" + "".join(f"{v:>10.4f}" for v in vals))
+        print(f"{m:<18}" + "".join(f"{v:>10.4f}" for v in vals))
     print("  (mAP@50-95)")
 
     # Degradation table
     print("\n" + "=" * 60)
     print("  Degradation from Clean (%)")
     print("=" * 60)
-    deg_variants = VARIANTS[1:]  # skip Clean
+    deg_variants = VARIANTS[1:]
     deg_short = [SHORT[v] for v in deg_variants]
-    print(f"{'Model':<14}" + "".join(f"{h:>10}" for h in deg_short))
-    print("-" * (14 + 10 * len(deg_short)))
+    print(f"{'Model':<18}" + "".join(f"{h:>10}" for h in deg_short))
+    print("-" * (18 + 10 * len(deg_short)))
     for m in models:
         clean = all_results[m]["Test_Clean"]["mAP50"]
         vals = []
         for v in deg_variants:
             cur = all_results[m][v]["mAP50"]
-            if clean > 0:
-                pct = (cur - clean) / clean * 100
-            else:
-                pct = 0.0
+            pct = (cur - clean) / clean * 100 if clean > 0 else 0.0
             vals.append(pct)
-        print(f"{m:<14}" + "".join(f"{v:>9.1f}%" for v in vals))
+        print(f"{m:<18}" + "".join(f"{v:>9.1f}%" for v in vals))
+
+
+def _print_comparison(all_results: dict):
+    """Print Baseline vs Augmented comparison."""
+    print("\n" + "=" * 60)
+    print("  Baseline vs Augmented (mAP@50 difference)")
+    print("=" * 60)
+    header_short = [SHORT[v] for v in VARIANTS]
+    print(f"{'Model':<14}" + "".join(f"{h:>10}" for h in header_short))
+    print("-" * (14 + 10 * len(header_short)))
+
+    for base, aug in BASELINE_PAIRS:
+        if base not in all_results or aug not in all_results:
+            continue
+        short_name = base.replace("Faster", "F")
+        vals = []
+        for v in VARIANTS:
+            diff = all_results[aug][v]["mAP50"] - all_results[base][v]["mAP50"]
+            vals.append(diff)
+        print(f"{short_name:<14}" + "".join(f"{v:>+10.4f}" for v in vals))
 
 
 def _save_json(all_results: dict):
@@ -294,7 +328,7 @@ def _save_json(all_results: dict):
 
 def _save_csv(all_results: dict):
     out_path = OUT_DIR / "eval_results.csv"
-    models = list(all_results.keys())
+    models = [m for m in MODEL_ORDER if m in all_results]
 
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -305,7 +339,7 @@ def _save_csv(all_results: dict):
             header.append(SHORT[v])
         writer.writerow(header)
 
-        # Rows
+        # mAP rows
         for m in models:
             row50 = [m, "mAP@50"]
             row95 = [m, "mAP@50-95"]
@@ -325,6 +359,18 @@ def _save_csv(all_results: dict):
                 cur = all_results[m][v]["mAP50"]
                 pct = (cur - clean) / clean * 100 if clean > 0 else 0.0
                 row.append(f"{pct:.1f}%")
+            writer.writerow(row)
+
+        # Baseline vs Augmented diff
+        writer.writerow([])
+        writer.writerow(["Model", "Metric"] + [SHORT[v] for v in VARIANTS])
+        for base, aug in BASELINE_PAIRS:
+            if base not in all_results or aug not in all_results:
+                continue
+            row = [base, "Aug-Base_mAP50"]
+            for v in VARIANTS:
+                diff = all_results[aug][v]["mAP50"] - all_results[base][v]["mAP50"]
+                row.append(f"{diff:+.4f}")
             writer.writerow(row)
 
     print(f"CSV  saved: {out_path.resolve()}")

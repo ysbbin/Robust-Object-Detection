@@ -142,12 +142,9 @@ YOLOv8m은 절대 성능이 높아서 **하락 후에도 여전히 mAP 1위**이
 | 개선 필요 | FasterRCNN -- Blur에서 -46% 하락은 실용 불가 수준 |
 | 핵심 발견 | Clean에서의 높은 정확도가 실환경 강건성을 보장하지 않음 |
 
-### 후속 실험 방향
+### 후속 실험 (완료)
 
-1. **Augmentation 기반 강건성 개선**: 학습 시 열화 데이터를 augmentation으로 섞어 재학습
-2. **Adversarial Training**: 의도적으로 모델을 공격하는 샘플로 학습하여 내성 강화
-3. **모델 앙상블**: 서로 다른 약점을 가진 모델을 결합하여 전체 강건성 향상
-4. **도메인 적응(Domain Adaptation)**: 열화 도메인에 대한 fine-tuning 또는 스타일 전이
+-> **Corruption Augmentation 학습 및 비교 평가 완료**: `02_augmented_training.md`, `03_final_comparison.md` 참조
 
 ---
 
