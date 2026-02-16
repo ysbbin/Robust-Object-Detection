@@ -6,6 +6,70 @@
 
 > Clean 이미지에서 학습된 객체 탐지 모델은 실환경의 열화 조건(노이즈, 블러, 저해상도)에서도 성능을 유지하는가? 그리고 학습 시 corruption augmentation을 적용하면 강건성이 얼마나 개선되는가?
 
+## Demo: Baseline vs Augmented (Blur)
+
+Blur 이미지에서 Baseline 모델은 대부분의 객체를 탐지하지 못하지만, Augmented 모델은 약 **2배 더 많은 객체를 탐지**합니다.
+
+### Faster R-CNN
+![FRCNN Demo](experiments/demo/FRCNN_img0161_gt102_base19_aug50.jpg)
+> GT: 102개 | Baseline: **19개** (19%) | Augmented: **50개** (49%) — 2.6배 개선
+
+### YOLOv8m
+![YOLOv8m Demo](experiments/demo/YOLOv8m_img0366_gt170_base38_aug75.jpg)
+> GT: 170개 | Baseline: **38개** (22%) | Augmented: **75개** (44%) — 2.0배 개선
+
+### RT-DETR-L
+![RT-DETR Demo](experiments/demo/RT-DETR_img0366_gt170_base94_aug162.jpg)
+> GT: 170개 | Baseline: **94개** (55%) | Augmented: **162개** (95%) — 1.7배 개선
+
+## Key Results
+
+### mAP@50 Comparison
+
+![mAP@50 Comparison](experiments/figures/map50_comparison.png)
+
+| Model | Clean | Noise | Blur | LowRes |
+|---|---:|---:|---:|---:|
+| FasterRCNN | 0.532 | 0.472 | 0.287 | 0.454 |
+| FasterRCNN_aug | 0.540 | 0.514 | **0.442** | 0.487 |
+| RT-DETR-L | 0.536 | 0.475 | 0.397 | 0.500 |
+| RT-DETR-L_aug | 0.578 | 0.547 | **0.524** | 0.543 |
+| YOLOv8m | **0.666** | 0.577 | 0.432 | 0.628 |
+| YOLOv8m_aug | 0.660 | **0.640** | **0.608** | **0.639** |
+
+### Degradation from Clean
+
+![Degradation](experiments/figures/degradation_comparison.png)
+
+| Model | Noise | Blur | LowRes |
+|---|---:|---:|---:|
+| FasterRCNN | -11.3% | -46.1% | -14.7% |
+| FasterRCNN_aug | -4.8% | -18.1% | -10.0% |
+| RT-DETR-L | -11.4% | -26.0% | -6.6% |
+| RT-DETR-L_aug | -5.3% | -9.4% | -6.1% |
+| YOLOv8m | -13.4% | -35.1% | -5.7% |
+| **YOLOv8m_aug** | **-3.0%** | **-7.9%** | **-3.1%** |
+
+### Augmentation Effect
+
+![Improvement](experiments/figures/augmentation_improvement.png)
+
+### Robustness Profile
+
+![Radar](experiments/figures/robustness_radar.png)
+
+### Per-Class AP@50 (Blur)
+
+![Heatmap](experiments/figures/class_ap50_blur_heatmap.png)
+
+## Key Findings
+
+1. **Blur is the most critical corruption**: up to -46.1% mAP drop for Faster R-CNN baseline
+2. **Corruption augmentation dramatically improves robustness**: Blur degradation reduced from -46.1% to -18.1% (FRCNN), -35.1% to -7.9% (YOLOv8)
+3. **Clean performance is preserved**: augmented models maintain or improve Clean mAP
+4. **YOLOv8m_aug achieves best overall robustness**: only -3.0% ~ -7.9% degradation across all conditions
+5. **RT-DETR-L_aug shows best balanced improvement**: Clean +4.2%p while corruption robustness also improved
+
 ## Experiment Design
 
 ### Models (3 architectures)
@@ -38,38 +102,6 @@
 
 ### Total Evaluations: 6 models x 4 test sets = 24
 
-## Key Results
-
-### mAP@50
-
-| Model | Clean | Noise | Blur | LowRes |
-|---|---:|---:|---:|---:|
-| FasterRCNN | 0.532 | 0.472 | 0.287 | 0.454 |
-| FasterRCNN_aug | 0.540 | 0.514 | **0.442** | 0.487 |
-| RT-DETR-L | 0.536 | 0.475 | 0.397 | 0.500 |
-| RT-DETR-L_aug | 0.578 | 0.547 | **0.524** | 0.543 |
-| YOLOv8m | **0.666** | 0.577 | 0.432 | 0.628 |
-| YOLOv8m_aug | 0.660 | **0.640** | **0.608** | **0.639** |
-
-### Degradation from Clean (mAP@50)
-
-| Model | Noise | Blur | LowRes |
-|---|---:|---:|---:|
-| FasterRCNN | -11.3% | -46.1% | -14.7% |
-| FasterRCNN_aug | -4.8% | -18.1% | -10.0% |
-| RT-DETR-L | -11.4% | -26.0% | -6.6% |
-| RT-DETR-L_aug | -5.3% | -9.4% | -6.1% |
-| YOLOv8m | -13.4% | -35.1% | -5.7% |
-| **YOLOv8m_aug** | **-3.0%** | **-7.9%** | **-3.1%** |
-
-### Key Findings
-
-1. **Blur is the most critical corruption**: up to -46.1% mAP drop for Faster R-CNN baseline
-2. **Corruption augmentation dramatically improves robustness**: Blur degradation reduced from -46.1% to -18.1% (FRCNN), -35.1% to -7.9% (YOLOv8)
-3. **Clean performance is preserved**: augmented models maintain or improve Clean mAP
-4. **YOLOv8m_aug achieves best overall robustness**: only -3.0% ~ -7.9% degradation across all conditions
-5. **RT-DETR-L_aug shows best balanced improvement**: Clean +4.2%p while corruption robustness also improved
-
 ## Project Structure
 
 ```
@@ -84,17 +116,23 @@ Robust-Object-Detection/
 │   ├── train_frcnn_augmented.py         # Faster R-CNN augmented training
 │   ├── train_rtdetr_augmented.py        # RT-DETR augmented training
 │   ├── train_yolo_augmented.py          # YOLOv8 augmented training
-│   └── eval_all.py                      # Unified evaluation (6x4=24 runs)
+│   ├── eval_all.py                      # Unified evaluation (6x4=24 runs)
+│   ├── plot_results.py                  # Result visualization
+│   └── demo_inference.py               # Demo comparison images
 ├── experiments/
 │   ├── frcnn/                           # Faster R-CNN results
 │   ├── rtdetr/                          # RT-DETR results
 │   ├── yolo/                            # YOLOv8 results
+│   ├── figures/                         # Visualization charts
+│   ├── demo/                            # Demo comparison images
 │   ├── eval_results.json                # Full evaluation results
 │   └── eval_results.csv                 # Summary CSV
 ├── docs/
 │   ├── 01_baseline_eval_results.md      # Baseline evaluation analysis
 │   ├── 02_augmented_training.md         # Augmented training details
-│   └── 03_final_comparison.md           # Final comparison analysis
+│   ├── 03_final_comparison.md           # Final comparison analysis
+│   ├── 04_visualization.md             # Visualization guide
+│   └── 05_demo_inference.md            # Demo inference analysis
 └── data/                                # (gitignored)
     ├── processed/                       # Processed datasets
     └── testsets/                         # Corrupted test sets
@@ -109,7 +147,7 @@ Robust-Object-Detection/
 - CUDA-compatible GPU (tested on RTX 3070 Ti 8GB)
 
 ```bash
-pip install torch torchvision ultralytics pycocotools opencv-python numpy
+pip install torch torchvision ultralytics pycocotools opencv-python numpy matplotlib seaborn
 ```
 
 ### Data Preparation
@@ -137,10 +175,17 @@ python -m scripts.train_rtdetr_augmented
 python -m scripts.train_yolo_augmented
 ```
 
-### Evaluation
+### Evaluation & Visualization
 
 ```bash
+# Run all 24 evaluations
 python -m scripts.eval_all
+
+# Generate charts
+python -m scripts.plot_results
+
+# Generate demo comparison images
+python -m scripts.demo_inference
 ```
 
 ## Environment
