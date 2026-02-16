@@ -1,6 +1,6 @@
 # Robust Object Detection on VisDrone-DET
 
-객체 탐지 모델의 **이미지 열화(corruption) 조건에서의 강건성(Robustness)**을 실험적으로 분석하고, corruption augmentation을 통한 개선 효과를 검증하는 프로젝트.
+객체 탐지 모델의 이미지 열화(corruption) 조건에서의 강건성(Robustness)을 실험적으로 분석하고, corruption augmentation을 통한 개선 효과를 검증하는 프로젝트.
 
 ## Research Question
 
