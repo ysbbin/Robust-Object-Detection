@@ -4,38 +4,38 @@
 
 **이미지 탐지(VisDrone-DET)**와 **비디오 탐지(VisDrone-VID)** 두 도메인에서 실험을 진행하였다.
 
-## Research Question
+## 연구 질문
 
-> Clean 이미지에서 학습된 객체 탐지 모델은 실환경의 열화 조건(노이즈, 블러, 저해상도)에서도 성능을 유지하는가? 그리고 corruption augmentation 또는 image restoration 전처리를 적용하면 강건성이 얼마나 개선되는가? 해당 전략은 비디오 데이터에서도 동일하게 유효한가?
+> Clean 이미지에서 학습된 객체 탐지 모델은 실환경의 열화 조건(노이즈, 블러, 저해상도)에서도 성능을 유지하는가? 그리고 corruption augmentation 또는 이미지 복원 전처리를 적용하면 강건성이 얼마나 개선되는가? 해당 전략은 비디오 데이터에서도 동일하게 유효한가?
 
-## Demo: Baseline vs Augmented (Blur)
+## 데모: Baseline vs Augmented (Blur 조건)
 
 Blur 이미지에서 Baseline 모델은 대부분의 객체를 탐지하지 못하지만, Augmented 모델은 약 **2배 더 많은 객체를 탐지**합니다.
 
 ### Faster R-CNN
 ![FRCNN Demo](experiments/demo/FRCNN_img0161_gt102_base19_aug50.jpg)
-> GT: 102개 | Baseline: **19개** (19%) | Augmented: **50개** (49%) — 2.6배 개선
+> 정답(GT): 102개 | Baseline: **19개** (19%) | Augmented: **50개** (49%) — 2.6배 개선
 
 ### YOLOv8m
 ![YOLOv8m Demo](experiments/demo/YOLOv8m_img0366_gt170_base38_aug75.jpg)
-> GT: 170개 | Baseline: **38개** (22%) | Augmented: **75개** (44%) — 2.0배 개선
+> 정답(GT): 170개 | Baseline: **38개** (22%) | Augmented: **75개** (44%) — 2.0배 개선
 
 ### RT-DETR-L
 ![RT-DETR Demo](experiments/demo/RT-DETR_img0366_gt170_base94_aug162.jpg)
-> GT: 170개 | Baseline: **94개** (55%) | Augmented: **162개** (95%) — 1.7배 개선
+> 정답(GT): 170개 | Baseline: **94개** (55%) | Augmented: **162개** (95%) — 1.7배 개선
 
-## Key Results
+## 주요 결과
 
-### 3-Strategy Comparison (Baseline vs Augmented vs Restored)
+### 3가지 전략 비교 (Baseline vs Augmented vs Restored)
 
 ![3-Strategy Comparison](experiments/figures/three_strategy_comparison.png)
 
-3가지 강건성 전략을 비교한 결과:
+3가지 강건성 전략 비교:
 - **Baseline**: Clean 이미지로만 학습
 - **Augmented**: Corruption augmentation으로 학습
 - **Restored**: U-Net으로 이미지 복원 후 Baseline 모델로 추론
 
-| Model | Strategy | Clean | Noise | Blur | LowRes |
+| 모델 | 전략 | Clean | Noise | Blur | LowRes |
 |---|---|---:|---:|---:|---:|
 | FasterRCNN | Baseline | 0.532 | 0.472 | 0.287 | 0.454 |
 | | Augmented | 0.540 | **0.514** | 0.442 | 0.487 |
@@ -47,229 +47,229 @@ Blur 이미지에서 Baseline 모델은 대부분의 객체를 탐지하지 못�
 | | Augmented | 0.660 | **0.640** | 0.608 | 0.639 |
 | | Restored | **0.666** | 0.201 | **0.640** | **0.642** |
 
-### Strategy Effectiveness
+### 전략별 개선 효과
 
 ![Strategy Improvement](experiments/figures/strategy_improvement.png)
 
-### Best Strategy per Condition
+### 조건별 최적 전략
 
 ![Best Strategy](experiments/figures/best_strategy_heatmap.png)
 
-### Robustness Profile (3 Strategies)
+### 강건성 프로파일 (3가지 전략)
 
 ![Radar](experiments/figures/three_strategy_radar.png)
 
-### Baseline vs Augmented (6 models)
+### Baseline vs Augmented 비교 (6개 모델)
 
 ![mAP@50 Comparison](experiments/figures/map50_comparison.png)
 
-### Degradation from Clean
+### Clean 대비 성능 하락률
 
 ![Degradation](experiments/figures/degradation_comparison.png)
 
-### Per-Class AP@50 (Blur)
+### 클래스별 AP@50 (Blur 조건)
 
 ![Heatmap](experiments/figures/class_ap50_blur_heatmap.png)
 
-## Key Findings
+## 핵심 발견
 
-### Image Detection (VisDrone-DET)
+### 이미지 탐지 (VisDrone-DET)
 
-1. **Blur is the most critical corruption**: up to -46.1% mAP drop for Faster R-CNN baseline
-2. **Corruption augmentation is the most robust strategy overall**: consistent improvement across all conditions
-3. **Image restoration excels at deblurring**: Restored strategy achieves best Blur performance (FRCNN +0.216, YOLOv8 +0.208)
-4. **Restoration fails on noise**: U-Net over-smoothing destroys texture information, causing severe detection drops (-62~65%)
-5. **YOLOv8m_aug achieves best overall robustness**: only -3.0% ~ -7.9% degradation across all conditions
-6. **Optimal strategy depends on corruption type**: Augmented for noise, Restored for blur, both effective for low-resolution
+1. **Blur가 가장 치명적인 열화**: Faster R-CNN baseline에서 최대 -46.1% mAP 하락
+2. **Corruption Augmentation이 전반적으로 가장 강건한 전략**: 모든 열화 조건에서 일관되게 개선
+3. **이미지 복원(Restored)은 Blur에 특히 효과적**: FRCNN +0.216, YOLOv8 +0.208 mAP 향상
+4. **이미지 복원은 Noise에서 오히려 역효과**: U-Net 과도한 스무딩으로 텍스처 정보 파괴 → 성능 -62~65% 폭락
+5. **YOLOv8m_aug가 전체적으로 최고 강건성**: 모든 조건에서 -3.0% ~ -7.9% 이내 하락
+6. **열화 유형별 최적 전략이 다름**: Noise → Augmented, Blur → Restored, LowRes → 둘 다 유효
 
-### Video Detection (VisDrone-VID)
+### 비디오 탐지 (VisDrone-VID)
 
-7. **Corruption augmentation is equally effective in video domain**: Blur degradation reduced from -38.3% → -9.1% (YOLOv8m), -30.9% → -4.5% (RT-DETR-L)
-8. **RT-DETR-L_aug achieves remarkable Blur robustness**: only -4.5% drop under Blur — best among all video models
-9. **Findings generalize across domains**: DET와 VID 모두 동일한 패턴 (Blur 최취약, Augmentation 일관 효과적)
+7. **Corruption Augmentation이 비디오 도메인에서도 동일하게 효과적**: Blur 하락률 -38.3% → -9.1% (YOLOv8m), -30.9% → -4.5% (RT-DETR-L)
+8. **RT-DETR-L_aug의 Blur 강건성이 특히 탁월**: Blur 조건 하락률 -4.5% — 비디오 모델 중 최저
+9. **결과가 도메인을 초월해 일반화됨**: DET와 VID 모두 동일한 패턴 (Blur 최취약, Augmentation 일관 효과적)
 
-## Experiment Design
+## 실험 설계
 
-### Image Detection (VisDrone-DET)
+### 이미지 탐지 (VisDrone-DET)
 
-#### Models (3 architectures)
+#### 사용 모델 (3종)
 
-| Model | Type | Framework |
+| 모델 | 유형 | 프레임워크 |
 |---|---|---|
 | Faster R-CNN (ResNet-50 FPN v2) | 2-Stage CNN | torchvision |
 | RT-DETR-L | Transformer | Ultralytics |
 | YOLOv8m | 1-Stage CNN | Ultralytics |
 
-#### Dataset
+#### 데이터셋
 
-- **VisDrone-DET** (drone-view object detection)
-- 6 classes: pedestrian, car, van, truck, bus, motor
-- COCO format (Faster R-CNN) + YOLO format (RT-DETR, YOLOv8)
+- **VisDrone-DET** (드론 시점 객체 탐지)
+- 6개 클래스: pedestrian, car, van, truck, bus, motor
+- COCO 포맷 (Faster R-CNN) + YOLO 포맷 (RT-DETR, YOLOv8)
 
-#### Robustness Strategies (3 types)
+#### 강건성 전략 (3종)
 
 - **Baseline**: Clean 데이터로만 학습 → 열화 이미지 직접 추론
 - **Augmented**: 학습 시 50% 확률로 corruption(noise/blur/lowres 중 랜덤 1개) 적용
-- **Restored**: Lightweight U-Net (3.70M params)으로 이미지 복원 후 Baseline 모델로 추론
-  - 복원 모델: PSNR 34.03dB, SSIM 0.947 달성
+- **Restored**: 경량 U-Net (3.70M 파라미터)으로 이미지 복원 후 Baseline 모델로 추론
+  - 복원 모델 성능: PSNR 34.03dB, SSIM 0.947
 
-**Total Evaluations: 9 configurations x 4 test sets = 36**
+**총 평가 횟수: 9개 설정 x 4개 테스트셋 = 36회**
 
 ---
 
-### Video Detection (VisDrone-VID)
+### 비디오 탐지 (VisDrone-VID)
 
-#### Models (2 architectures)
+#### 사용 모델 (2종)
 
-| Model | Type | Framework |
+| 모델 | 유형 | 프레임워크 |
 |---|---|---|
 | RT-DETR-L | Transformer | Ultralytics |
 | YOLOv8m | 1-Stage CNN | Ultralytics |
 
-#### Dataset
+#### 데이터셋
 
-- **VisDrone-VID** (drone-view video sequences, frame-level detection)
-- 6 classes: pedestrian, car, van, truck, bus, motor
-- YOLO format (프레임 단위 추출)
+- **VisDrone-VID** (드론 시점 비디오 시퀀스, 프레임 단위 탐지)
+- 6개 클래스: pedestrian, car, van, truck, bus, motor
+- YOLO 포맷 (비디오 프레임 단위 추출)
 
-#### Robustness Strategies (2 types)
+#### 강건성 전략 (2종)
 
 - **Baseline**: Clean 데이터로만 학습
 - **Augmented**: 학습 시 50% 확률로 corruption 적용
 
-#### Video Model Results (mAP@50)
+#### 비디오 모델 결과 (mAP@50)
 
-| Model | Clean | Noise | Blur | LowRes |
+| 모델 | Clean | Noise | Blur | LowRes |
 |---|---:|---:|---:|---:|
 | YOLOv8m-VID Baseline | 0.387 | 0.330 | 0.239 | 0.309 |
 | YOLOv8m-VID Augmented | **0.409** | **0.391** | **0.372** | **0.385** |
 | RT-DETR-VID Baseline | 0.316 | 0.287 | 0.218 | 0.265 |
 | RT-DETR-VID Augmented | **0.335** | **0.319** | **0.320** | **0.310** |
 
-![VID mAP@50 Comparison](experiments/figures/vid_map50_comparison.png)
+![VID mAP@50 비교](experiments/figures/vid_map50_comparison.png)
 
-![VID Degradation](experiments/figures/vid_degradation_comparison.png)
+![VID 성능 하락률](experiments/figures/vid_degradation_comparison.png)
 
-**Total Evaluations: 4 configurations x 4 test sets = 16**
+**총 평가 횟수: 4개 설정 x 4개 테스트셋 = 16회**
 
 ---
 
-### Test Conditions (공통, 4 types)
+### 테스트 조건 (공통, 4종)
 
-| Condition | Description | Parameter |
+| 조건 | 설명 | 파라미터 |
 |---|---|---|
-| Clean | Original images | - |
-| Noise | Gaussian noise | sigma=15 |
-| Blur | Motion blur | kernel=9, angle=0 deg |
-| LowRes | Downscale + upscale | factor=0.5x |
+| Clean | 원본 이미지 | - |
+| Noise | 가우시안 노이즈 | sigma=15 |
+| Blur | 모션 블러 | kernel=9, angle=0도 |
+| LowRes | 저해상도 (축소 후 복원) | 0.5x 축소 |
 
-## Project Structure
+## 프로젝트 구조
 
 ```
 Robust-Object-Detection/
 ├── scripts/
-│   ├── augmentations.py                 # Shared corruption augmentation module
-│   ├── convert_visdrone_to_coco.py      # VisDrone-DET -> COCO format
-│   ├── convert_visdrone_to_yolo.py      # VisDrone-DET -> YOLO format
-│   ├── convert_visdrone_vid_to_yolo.py  # VisDrone-VID -> YOLO format (frame extraction)
-│   ├── build_corrupted_testsets.py      # Generate corrupted test sets
-│   ├── coco_detection_dataset.py        # PyTorch Dataset for COCO format
-│   ├── train_frcnn_baseline.py          # Faster R-CNN baseline training
-│   ├── train_frcnn_augmented.py         # Faster R-CNN augmented training
-│   ├── train_rtdetr_augmented.py        # RT-DETR-L augmented training (DET)
-│   ├── train_yolo_augmented.py          # YOLOv8m augmented training (DET)
-│   ├── train_vid_yolo_baseline.py       # YOLOv8m baseline training (VID)
-│   ├── train_vid_yolo_augmented.py      # YOLOv8m augmented training (VID)
-│   ├── train_vid_rtdetr_baseline.py     # RT-DETR-L baseline training (VID)
-│   ├── train_vid_rtdetr_augmented.py    # RT-DETR-L augmented training (VID)
-│   ├── eval_all.py                      # DET evaluation (6x4=24 runs)
-│   ├── eval_vid.py                      # VID evaluation (4x4=16 runs)
-│   ├── restoration_net.py               # Restoration U-Net model
-│   ├── train_restoration.py             # Restoration model training
-│   ├── restore_testsets.py              # Apply restoration to test sets
-│   ├── eval_restored.py                 # Evaluate on restored test sets
-│   ├── plot_results.py                  # DET: Baseline vs Augmented visualization
-│   ├── plot_three_strategies.py         # DET: 3-strategy comparison visualization
-│   ├── plot_vid_results.py              # VID: Baseline vs Augmented visualization
-│   └── demo_inference.py               # Demo comparison images
+│   ├── augmentations.py                 # 공용 corruption augmentation 모듈
+│   ├── convert_visdrone_to_coco.py      # VisDrone-DET → COCO 포맷 변환
+│   ├── convert_visdrone_to_yolo.py      # VisDrone-DET → YOLO 포맷 변환
+│   ├── convert_visdrone_vid_to_yolo.py  # VisDrone-VID → YOLO 포맷 변환 (프레임 추출)
+│   ├── build_corrupted_testsets.py      # 열화 테스트셋 생성
+│   ├── coco_detection_dataset.py        # COCO 포맷용 PyTorch Dataset
+│   ├── train_frcnn_baseline.py          # Faster R-CNN baseline 학습
+│   ├── train_frcnn_augmented.py         # Faster R-CNN augmented 학습
+│   ├── train_rtdetr_augmented.py        # RT-DETR-L augmented 학습 (DET)
+│   ├── train_yolo_augmented.py          # YOLOv8m augmented 학습 (DET)
+│   ├── train_vid_yolo_baseline.py       # YOLOv8m baseline 학습 (VID)
+│   ├── train_vid_yolo_augmented.py      # YOLOv8m augmented 학습 (VID)
+│   ├── train_vid_rtdetr_baseline.py     # RT-DETR-L baseline 학습 (VID)
+│   ├── train_vid_rtdetr_augmented.py    # RT-DETR-L augmented 학습 (VID)
+│   ├── eval_all.py                      # DET 평가 (6x4=24회)
+│   ├── eval_vid.py                      # VID 평가 (4x4=16회)
+│   ├── restoration_net.py               # 복원 U-Net 모델 정의
+│   ├── train_restoration.py             # 복원 모델 학습
+│   ├── restore_testsets.py              # 테스트셋 복원 적용
+│   ├── eval_restored.py                 # 복원 이미지 평가
+│   ├── plot_results.py                  # DET 시각화: Baseline vs Augmented
+│   ├── plot_three_strategies.py         # DET 시각화: 3가지 전략 비교
+│   ├── plot_vid_results.py              # VID 시각화: Baseline vs Augmented
+│   └── demo_inference.py               # 데모 비교 이미지 생성
 ├── experiments/
-│   ├── frcnn/                           # Faster R-CNN results (DET)
-│   ├── rtdetr/                          # RT-DETR-L results (DET)
-│   ├── yolo/                            # YOLOv8m results (DET)
-│   ├── vid_rtdetr/                      # RT-DETR-L results (VID)
-│   ├── vid_yolo/                        # YOLOv8m results (VID)
-│   ├── restoration/                     # Restoration model checkpoints
-│   ├── figures/                         # Visualization charts
-│   ├── demo/                            # Demo comparison images
-│   ├── eval_results.json                # DET Baseline/Augmented evaluation results
-│   ├── eval_restored_results.json       # DET Restored evaluation results
-│   └── vid_eval_results.json            # VID evaluation results
+│   ├── frcnn/                           # Faster R-CNN 학습 결과 (DET)
+│   ├── rtdetr/                          # RT-DETR-L 학습 결과 (DET)
+│   ├── yolo/                            # YOLOv8m 학습 결과 (DET)
+│   ├── vid_rtdetr/                      # RT-DETR-L 학습 결과 (VID)
+│   ├── vid_yolo/                        # YOLOv8m 학습 결과 (VID)
+│   ├── restoration/                     # 복원 모델 체크포인트
+│   ├── figures/                         # 시각화 차트
+│   ├── demo/                            # 데모 비교 이미지
+│   ├── eval_results.json                # DET 평가 결과 (Baseline/Augmented)
+│   ├── eval_restored_results.json       # DET 평가 결과 (Restored)
+│   └── vid_eval_results.json            # VID 평가 결과
 ├── docs/
-│   ├── 01_baseline_eval_results.md      # DET: Baseline evaluation analysis
-│   ├── 02_augmented_training.md         # DET: Augmented training details
-│   ├── 03_final_comparison.md           # DET: Final comparison analysis
-│   ├── 04_visualization.md              # DET: Visualization guide
-│   ├── 05_demo_inference.md             # DET: Demo inference analysis
-│   ├── 06_restoration_experiment.md     # DET: Image restoration & 3-strategy comparison
-│   └── 07_vid_experiment.md             # VID: Video model experiment report
+│   ├── 01_baseline_eval_results.md      # DET: Baseline 평가 분석
+│   ├── 02_augmented_training.md         # DET: Augmented 학습 상세
+│   ├── 03_final_comparison.md           # DET: 최종 비교 분석
+│   ├── 04_visualization.md              # DET: 시각화 가이드
+│   ├── 05_demo_inference.md             # DET: 데모 추론 분석
+│   ├── 06_restoration_experiment.md     # DET: 이미지 복원 & 3전략 비교
+│   └── 07_vid_experiment.md             # VID: 비디오 모델 실험 보고서
 └── data/                                # (gitignored)
-    ├── processed/                        # Processed datasets
-    └── testsets/                         # Corrupted test sets
+    ├── processed/                        # 전처리된 데이터셋
+    └── testsets/                         # 열화 테스트셋
 ```
 
-## Setup
+## 실행 방법
 
-### Requirements
+### 환경 설정
 
 - Python 3.11+
 - PyTorch 2.5+
-- CUDA-compatible GPU (tested on RTX 3070 Ti 8GB)
+- CUDA 지원 GPU (RTX 3070 Ti 8GB에서 테스트)
 
 ```bash
 pip install torch torchvision ultralytics pycocotools opencv-python numpy matplotlib seaborn
 ```
 
-### Data Preparation
+### 데이터 준비
 
 ```bash
-# 1. Download VisDrone-DET dataset and place in data/raw/
+# 1. VisDrone-DET/VID 데이터셋 다운로드 후 data/ 하위에 배치
 
-# 2. Convert to COCO/YOLO format
+# 2. DET: COCO/YOLO 포맷 변환
 python -m scripts.convert_visdrone_to_coco
 python -m scripts.convert_visdrone_to_yolo
 
-# 3. Generate corrupted test sets
+# 3. VID: YOLO 포맷 변환 (프레임 추출)
+python -m scripts.convert_visdrone_vid_to_yolo
+
+# 4. 열화 테스트셋 생성
 python -m scripts.build_corrupted_testsets
 ```
 
-### Image Detection Training (VisDrone-DET)
+### 이미지 탐지 학습 (VisDrone-DET)
 
 ```bash
-# Baseline (clean only)
+# Baseline (clean 데이터로만 학습)
 python -m scripts.train_frcnn_baseline
 
-# Augmented (with corruption augmentation)
+# Augmented (corruption augmentation 적용)
 python -m scripts.train_frcnn_augmented
 python -m scripts.train_rtdetr_augmented
 python -m scripts.train_yolo_augmented
 ```
 
-### Image Restoration
+### 이미지 복원 모델 학습
 
 ```bash
-# Train restoration U-Net
+# 복원 U-Net 학습
 python -m scripts.train_restoration
 
-# Restore corrupted test sets
+# 테스트셋에 복원 적용
 python -m scripts.restore_testsets
 ```
 
-### Video Detection Training (VisDrone-VID)
+### 비디오 탐지 학습 (VisDrone-VID)
 
 ```bash
-# Convert VisDrone-VID to YOLO format
-python -m scripts.convert_visdrone_vid_to_yolo
-
 # Baseline
 python -m scripts.train_vid_yolo_baseline
 python -m scripts.train_vid_rtdetr_baseline
@@ -279,28 +279,28 @@ python -m scripts.train_vid_yolo_augmented
 python -m scripts.train_vid_rtdetr_augmented
 ```
 
-### Evaluation & Visualization
+### 평가 및 시각화
 
 ```bash
-# DET: Baseline/Augmented evaluations (24 runs)
+# DET 평가: Baseline/Augmented (24회)
 python -m scripts.eval_all
 
-# DET: Restored evaluations (12 runs)
+# DET 평가: Restored (12회)
 python -m scripts.eval_restored
 
-# VID: Evaluations (16 runs)
+# VID 평가 (16회)
 python -m scripts.eval_vid
 
-# Generate charts
+# 시각화 차트 생성
 python -m scripts.plot_results
 python -m scripts.plot_three_strategies
 python -m scripts.plot_vid_results
 
-# Generate demo comparison images
+# 데모 비교 이미지 생성
 python -m scripts.demo_inference
 ```
 
-## Environment
+## 실험 환경
 
 - GPU: NVIDIA GeForce RTX 3070 Ti (8GB)
 - OS: Windows 11
